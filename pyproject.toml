@@ -1,0 +1,21 @@
+[project]
+name = "trading-bot-v3"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "ccxt>=4.5.73",
+    "pandas>=3.0.5",
+    "python-dotenv>=1.2.2",
+    "ta-lib>=0.7.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
