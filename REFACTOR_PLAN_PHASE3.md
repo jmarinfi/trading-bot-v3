@@ -1,7 +1,8 @@
 # Subplan Fase 3 — OrderService: toda la I/O de órdenes sale de Portfolio
 
-> Derivado de: `REFACTOR_PLAN.md`, punto 3 de «Orden de implementación». Al aprobar, la única acción inmediata es **guardar este documento como `REFACTOR_PLAN_PHASE3.md`** — no se implementa nada hasta que lo pidas.
-> Continuamos con el enfoque strangler aprobado: el bot arranca en todo momento. División de trabajo habitual: tú implementas cada tarea; yo reviso y añado los tests.
+> Derivado de: `REFACTOR_PLAN.md`, punto 3 de «Orden de implementación».
+> Estado: aprobado, pendiente de ejecución. Continuamos con el enfoque strangler aprobado: el bot arranca en todo momento.
+> División de trabajo habitual: tú implementas cada tarea; yo reviso y añado los tests.
 
 ## Objetivo de la fase
 
@@ -31,6 +32,8 @@ Decisiones de diseño:
 - `cancel_sl` conserva la semántica best-effort actual (guarda por `sl_order is None` + `try/except ExchangeError` con warning). El resto **propaga** excepciones, como hoy hace el exchange crudo — el manejo de "vela descartada" sigue en `trade_worker`.
 - **Nuevos logs info compactos por orden colocada** (símbolo, lado, precio, cantidad, order id) además del volcado completo a debug — era la promesa diferida de la fase 1 ("orden creada → info").
 - `has_balance` es el `_there_is_coin` actual, correctamente await-ado en los call sites.
+
+---
 
 ## Tarea 1 — Crear `src/orders.py` (sin tocar nada más)
 
@@ -74,6 +77,8 @@ El bot no cambia: ningún consumidor todavía.
 
 **Tests (míos, al revisar):** `tests/test_orders.py` con un `FakeExchange` que registra las llamadas — mapeo de lados (long→buy/sell correcto en cada método), dirección del SL estático (por debajo en long, por encima en short), `cancel_sl` no-op sin SL y tragando `ExchangeError`, `has_balance` True/False/moneda ausente, `cancel_all` pasa el símbolo.
 
+---
+
 ## Tarea 2 — Portfolio recibe `orders`; migrar `on_trade` + main.py
 
 **Ficheros:** `src/portfolio/portfolio.py`, `main.py`
@@ -83,7 +88,9 @@ El bot no cambia: ningún consumidor todavía.
 - `on_trade`: la llamada `await self._cancel_sl_order(position=position)` pasa a `await self.orders.cancel_sl(position=position)`.
 - `main.py`: construir `orders = OrderService(exchange=exchange)` y pasarlo a `Portfolio(..., orders=orders)`.
 
-**Nota:** entre T2 y T3 el fichero compila porque `on_candle` aún usa `self.exchange`... no: `self.exchange` desaparece en esta tarea, así que **T2 y T3 deben ir en el mismo commit** o `on_candle` rompe. Alternativa ordenada: hacer T2+T3 juntos. Lo resolvo en el plan: T2 y T3 se implementan seguidos y se verifica al final de T3.
+**Importante:** al desaparecer `self.exchange` en esta tarea, `on_candle` (que aún usa el exchange) rompe hasta aplicar la T3 — **T2 y T3 deben ir en el mismo commit** y se verifica al final de ambas.
+
+---
 
 ## Tarea 3 — Migrar la gestión de posiciones de `on_candle`
 
@@ -92,7 +99,7 @@ El bot no cambia: ningún consumidor todavía.
 - `cancel_all_orders` + log → `await self.orders.cancel_all(symbol=self.symbol)`.
 - Prune: `self._cancel_sl_order(...)` → `self.orders.cancel_sl(position=position)`.
 - Switch SL (estático→trailing): `cancel_trigger_order` + `create_trigger_order` con el `side` condicional → `await self.orders.cancel_sl(position=position)` + `position.sl_order = await self.orders.place_sl(position=position, trigger_price=sl_trailing_price, amount=self.filled_amount(position=position))`.
-- **TP unificado**: los dos bloques espejo (long con `exit_long_price`/`exit_short` signal, short con `exit_short_price`/`exit_long` signal) colapsan en uno:
+- **TP unificado**: los dos bloques espejo (long con `exit_long_price`, short con `exit_short_price`) colapsan en uno:
 
 ```python
 side_word = "long" if position.side == "long" else "short"
@@ -110,6 +117,8 @@ if exit_price is not None and exit_price != 0 and exit_signal is None:
 ```
 
 **Verificación T2+T3:** `uv run pytest` (45 passed, previa adaptación de `make_portfolio` en mis tests) + `uv run python -c "import main"` OK.
+
+---
 
 ## Tarea 4 — Migrar las señales de `on_candle`; fix del await; colapso de las entradas espejo
 
@@ -145,6 +154,8 @@ if signal.type in ("enter_long", "enter_short"):
 
 **Tests (míos, al revisar):** con `FakeOrderService` + BD tmp — entrada con saldo insuficiente no crea posición; con saldo crea la posición con sus órdenes; señal de salida coloca el cierre a mercado del lado correcto.
 
+---
+
 ## Tarea 5 — Verificación de cierre de fase
 
 - `uv run pytest` completo en verde (45 existentes + `test_orders.py` + tests de gating, adaptando `make_portfolio`).
@@ -152,6 +163,8 @@ if signal.type in ("enter_long", "enter_short"):
 - Arranque manual corto (arrancar y Ctrl-C) — tu parte.
 - `grep -n "exchange" src/portfolio/portfolio.py` → cero referencias (solo `orders`).
 - Marcar fase 3 completada en `REFACTOR_PLAN.md`.
+
+---
 
 ## Cambios de comportamiento (los únicos)
 
