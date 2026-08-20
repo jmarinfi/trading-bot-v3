@@ -80,6 +80,33 @@ class Portfolio:
             None,
         )
 
+    def record_open_fill(self, position: Position, trade: Trade) -> bool:
+        """Registra un fill de apertura; ignora duplicados por id.
+        Devuelve True si el fill era nuevo y False si ya estaba registrado.
+        """
+        if any(fill["id"] == trade["id"] for fill in position.open_fills):
+            return False
+        position.open_fills.append(trade)
+        return True
+
+    def mark_closed(self, position: Position) -> None:
+        """Marca la posición como cerrada."""
+        position.is_open = False
+
+    def record_close_fill(self, position: Position, trade: Trade) -> bool:
+        """Registra un fill de cierre; ignora duplicados por id.
+        Devuelve True si este fill cerró la posición.
+        """
+        if any(fill["id"] == trade["id"] for fill in position.close_fills):
+            return False
+        position.close_fills.append(trade)
+        sum_open = self.filled_amount(position)
+        sum_close = sum(float(fill["amount"]) for fill in position.close_fills)
+        if abs(sum_open - sum_close) < calculate_dust_value(trade["price"]):
+            self.mark_closed(position)
+            return True
+        return False
+
     async def _cancel_sl_order(self, position: Position) -> None:
         if position.sl_order is None:
             return
@@ -107,28 +134,22 @@ class Portfolio:
 
         for trade in trades:
             order_trade = trade["order"]
-            price_trade = trade["price"]
 
             position = self.find_by_open_order(
                 positions=opened_positions, order_id=order_trade
             )
-            if position is not None:
-                position.open_fills.append(trade)
+            if position is not None and not self.record_open_fill(
+                position=position, trade=trade
+            ):
+                log.info("fill de apertura duplicado ignorado (trade %s)", trade["id"])
 
             position = self.find_by_exit_order(
                 positions=opened_positions, order_id=order_trade
             )
-            if position is not None:
-                position.close_fills.append(trade)
-                sum_open_fills = sum([float(f["amount"]) for f in position.open_fills])
-                sum_close_fills = sum(
-                    [float(f["amount"]) for f in position.close_fills]
-                )
-                if abs(sum_open_fills - sum_close_fills) < calculate_dust_value(
-                    price=price_trade
-                ):
-                    await self._cancel_sl_order(position=position)
-                    position.is_open = False
+            if position is not None and self.record_close_fill(
+                position=position, trade=trade
+            ):
+                await self._cancel_sl_order(position=position)
 
         for position in opened_positions:
             self.store.save(position)
@@ -145,10 +166,9 @@ class Portfolio:
 
         for position in opened_positions:
             # Cerrar posiciones cuya orden de apertura no se ha ejecutado
-            open_fills = position.open_fills
-            if not open_fills:
+            if not position.open_fills:
                 await self._cancel_sl_order(position=position)
-                position.is_open = False
+                self.mark_closed(position=position)
                 continue
 
             # Ajustar SL

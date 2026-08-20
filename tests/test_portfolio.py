@@ -96,3 +96,83 @@ def test_find_by_exit_order_ignores_positions_without_exit_orders(tmp_path):
     position = make_position()
 
     assert portfolio.find_by_exit_order([position], "order-1") is None
+
+
+def test_record_open_fill_appends_new_trade(tmp_path):
+    portfolio = make_portfolio(tmp_path)
+    position = make_position()
+    trade = {"id": "t1", "order": "order-1", "price": 100.0, "amount": 0.5}
+
+    assert portfolio.record_open_fill(position, trade) is True
+    assert position.open_fills == [trade]
+
+
+def test_record_open_fill_ignores_duplicate_by_id(tmp_path):
+    portfolio = make_portfolio(tmp_path)
+    position = make_position(open_fills=[{"id": "t1", "amount": 0.5}])
+    duplicate = {"id": "t1", "amount": 0.5}
+
+    assert portfolio.record_open_fill(position, duplicate) is False
+    assert position.open_fills == [{"id": "t1", "amount": 0.5}]
+
+
+def test_record_open_fill_allows_distinct_ids(tmp_path):
+    portfolio = make_portfolio(tmp_path)
+    first = {"id": "t1", "order": "order-1", "price": 100.0, "amount": 0.5}
+    second = {"id": "t2", "order": "order-1", "price": 101.0, "amount": 0.25}
+    position = make_position(open_fills=[first])
+
+    assert portfolio.record_open_fill(position, second) is True
+    assert position.open_fills == [first, second]
+
+
+def test_mark_closed_flips_is_open(tmp_path):
+    portfolio = make_portfolio(tmp_path)
+    position = make_position()
+
+    portfolio.mark_closed(position)
+
+    assert position.is_open is False
+
+
+def test_record_close_fill_partial_does_not_close(tmp_path):
+    portfolio = make_portfolio(tmp_path)
+    position = make_position(open_fills=[{"id": "t0", "amount": 0.5}])
+    trade = {"id": "c1", "order": "sl-1", "price": 100.0, "amount": 0.2}
+
+    assert portfolio.record_close_fill(position, trade) is False
+    assert position.is_open is True
+
+
+def test_record_close_fill_closes_when_amounts_match(tmp_path):
+    portfolio = make_portfolio(tmp_path)
+    position = make_position(open_fills=[{"id": "t0", "amount": 0.5}])
+    trade = {"id": "c1", "order": "sl-1", "price": 100.0, "amount": 0.5}
+
+    assert portfolio.record_close_fill(position, trade) is True
+    assert position.is_open is False
+
+
+def test_record_close_fill_accumulates_until_closed(tmp_path):
+    portfolio = make_portfolio(tmp_path)
+    position = make_position(open_fills=[{"id": "t0", "amount": 0.5}])
+
+    first = {"id": "c1", "order": "sl-1", "price": 100.0, "amount": 0.3}
+    second = {"id": "c2", "order": "sl-1", "price": 100.0, "amount": 0.2}
+
+    assert portfolio.record_close_fill(position, first) is False
+    assert portfolio.record_close_fill(position, second) is True
+    assert position.is_open is False
+
+
+def test_record_close_fill_ignores_duplicate_and_no_double_close(tmp_path):
+    portfolio = make_portfolio(tmp_path)
+    fill = {"id": "c1", "order": "sl-1", "price": 100.0, "amount": 0.5}
+    position = make_position(open_fills=[{"id": "t0", "amount": 0.5}])
+    assert portfolio.record_close_fill(position, fill) is True
+    assert position.is_open is False
+
+    duplicate = {"id": "c1", "order": "sl-1", "price": 100.0, "amount": 0.5}
+
+    assert portfolio.record_close_fill(position, duplicate) is False
+    assert position.close_fills == [fill]
