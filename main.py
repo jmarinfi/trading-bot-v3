@@ -8,6 +8,7 @@ from src.config import load_settings
 from src.data.candle_store import CandleStore
 from src.exchange.bitget_exchange import BitgetExchange
 from src.logging_setup import setup_logging
+from src.orders import OrderService
 from src.portfolio.portfolio import Portfolio
 from src.strategy.lrs_strategy import LRsStrategy
 from src.trade_worker import trade_worker
@@ -28,6 +29,7 @@ async def main():
             settings.bitget_api_secret,
             settings.bitget_passphrase,
         )
+        orders = OrderService(exchange=exchange)
         signal_queue = asyncio.Queue()
         candle_store = CandleStore(
             buffer_size=settings.buffer_candles_length, timeframe=settings.timeframe
@@ -39,7 +41,7 @@ async def main():
             n_bars_static_sl=settings.n_bars_static_sl,
             pct_static_sl=settings.pct_static_sl,
             pct_trailing_sl=settings.pct_trailing_sl,
-            exchange=exchange,
+            orders=orders,
         )
 
         main_task = asyncio.current_task()

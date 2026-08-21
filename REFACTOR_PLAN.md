@@ -116,7 +116,7 @@ Se ejecuta antes de arrancar los workers, single-threaded, usando el mismo Portf
 
 1. ✅ Scaffolding: `config.py` validado, `logging_setup.py`, `events.py` + fixes de crashes latentes (completada — ver `REFACTOR_PLAN_PHASE1.md`; durante la fase, `mr_ret.py` fue sustituida por `lrs_strategy.py` y se resolvió no introducir la clave `MAX_NUM_OPEN_ORDERS`).
 2. ✅ `Portfolio` puro + `test_portfolio.py` (completada con enfoque strangler — ver `REFACTOR_PLAN_PHASE2.md`: métodos puros extraídos y dedup de fills activo en el bot vivo; la conversión a estado en memoria se completa en la fase 4 con el engine).
-3. `OrderService` (unificación long/short).
+3. ✅ `OrderService` (completada — ver `REFACTOR_PLAN_PHASE3.md`: toda la I/O de órdenes vive en `src/orders.py`, las ramas espejo long/short colapsaron, y el chequeo de saldo `has_balance` queda correctamente await-ado — fix activo del bug detectado en la fase 1).
 4. `TradingEngine` + `test_engine.py` con FakeExchange.
 5. `trades_watcher.py`, adaptar `candle_worker.py`, recablear `main.py`; eliminar `trade_worker.py`.
 6. PositionStore endurecido + `journal.py` + tests.

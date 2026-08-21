@@ -125,7 +125,7 @@ def test_portfolio_uses_db_path(tmp_path):
         n_bars_static_sl=10,
         pct_static_sl=0.02,
         pct_trailing_sl=0.01,
-        exchange=object(),
+        orders=object(),
         db_path=db_path,
     )
     position = make_position()
